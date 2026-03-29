@@ -22,7 +22,10 @@
       "Bash(xargs grep:*)",
       "Bash(xargs ls:*)",
       "Bash(find /c/Users/Maxwell/.claude/plugins/cache/claude-plugins-official -name *.json -type f -exec grep -l hooks {})",
-      "Bash(2)"
+      "Bash(2)",
+      "Bash(git rm:*)",
+      "Bash(rm -rf swarm/.git)",
+      "Bash(git mv:*)"
     ]
   }
 }

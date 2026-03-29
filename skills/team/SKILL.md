@@ -61,21 +61,53 @@ Before designing anything, strip away assumptions. Apply these tests silently:
 
 ### 3. Build the Pipeline
 
-The irreducible pattern for any work is:
+Work through these decisions in order. Each one determines what the next stage needs.
 
-```
-THINK → MAKE → JUDGE
-```
+#### a. Identify the stages
 
-Most pipelines are exactly three stages. Some are two (no judgment needed) or one (just do it). Very few legitimately need four or more. If you're designing more than four stages, you're probably fragmenting a single cognitive act across multiple agents.
+List the transitions you heard in step 1 — the points where the nature of the work changes. Each transition boundary is a candidate stage break. Apply the tests from step 2 to collapse any that don't survive. What remains are your stages.
 
-Map the user's workflow to the minimal stages:
+The irreducible pattern is: **THINK → MAKE → JUDGE**. Most pipelines are 2–3 stages. If you have more than 4, you're probably fragmenting a single cognitive act.
 
-- **Thinker stages** use `general-purpose` — analysis, design, research, planning
-- **Maker stages** use `swarm:coder` with `isolation: "worktree"` — building, writing, implementing
-- **Judge stages** use `swarm:reviewer` with `pass_pattern` — verification, review, validation
+#### b. For each stage, determine what it needs and what it produces
 
-For each stage, write a `description` that tells the agent exactly what "done" looks like. Vague descriptions like "review the code" produce vague results. "Check for correctness against the task spec, security vulnerabilities, and missing edge cases" produces real judgment.
+Walk through the stages in order and answer:
+
+1. **What does this stage need to start?** — The task description? Output from a prior stage? Access to specific files? A clean worktree?
+2. **What does this stage produce?** — Code changes? A report? A pass/fail verdict? Feedback for a retry?
+3. **Who consumes the output?** — The next stage? The orchestrator (for gating)? The user (final deliverable)?
+
+This determines the stage configuration:
+
+| Decision | If yes | Config |
+|----------|--------|--------|
+| Does it write/modify code files? | Use a maker agent | `"agent": "swarm:coder"` |
+| Could it run in parallel with other tasks touching the same files? | Isolate it | `"isolation": "worktree"` |
+| Does it produce a pass/fail judgment that should gate progression? | Add a gate pattern | `"pass_pattern": "^PASS"` |
+| On failure, should a previous stage redo its work? | Point back | `"fail_returns_to": "<stage>"` |
+| Is it pure analysis, research, or planning (no code changes)? | Use a generalist | `"agent": "general-purpose"` |
+| Is it judging quality of prior work (no code changes)? | Use a reviewer | `"agent": "swarm:reviewer"` |
+
+#### c. Wire the stage sequence
+
+Put the stages in dependency order — each stage's inputs must be available from prior stages or the task description. The orchestrator feeds each stage:
+
+- The task `id`, `title`, and `description` (always)
+- The `description` field from the stage config (the agent's specific instructions)
+- The `result` from completed dependency tasks (if any)
+- The `feedback` from a failed gate (if this is a retry)
+
+So each stage's `description` field is your one shot at telling the agent what "done" looks like. Write it as an instruction, not a label:
+
+- **Bad**: `"Review the code"` — vague, the agent invents its own criteria
+- **Good**: `"Verify all task requirements are met, check for injection vulnerabilities and unhandled edge cases, run existing tests if present"` — the agent knows exactly what to check
+
+#### d. Set failure policy
+
+Decide `max_attempts` — how many times a task can cycle through failed gates before giving up. Default to 3. Consider:
+
+- More attempts (4–5) for tasks where feedback loops are productive (code → review → code)
+- Fewer attempts (1–2) for stages where failure means the task is fundamentally wrong (research that finds nothing)
 
 ### 4. Present the Design
 

@@ -1,8 +1,0 @@
-{
-  "name": "swarm",
-  "version": "0.1.0",
-  "description": "Deterministic state machine for autonomous multi-agent development with queue-based orchestration and worktree isolation",
-  "author": {
-    "name": "Maxwell"
-  }
-}
