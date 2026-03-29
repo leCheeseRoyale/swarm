@@ -80,6 +80,7 @@ Create `teams/<name>.json` in the plugin directory:
 | `/swarm:run` | `/swarm:run [--team name] <plan>` | Parse plan, select team, launch orchestrator |
 | `/swarm:status` | `/swarm:status` | Show queue state, pipeline progress, recent events |
 | `/swarm:push` | `/swarm:push <task>` | Add a task to an active queue |
+| `/swarm:team` | `/swarm:team [name or description]` | Create a custom team through conversation |
 
 ## Built-in Agents
 
