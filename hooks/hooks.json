@@ -12,7 +12,7 @@
         ]
       }
     ],
-    "SubAgentStop": [
+    "SubagentStop": [
       {
         "matcher": "*",
         "hooks": [
