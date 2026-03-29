@@ -9,6 +9,14 @@ allowed-tools: ["Read", "Write", "Glob", "Bash"]
 
 Design the minimal, elegant agent pipeline for the user's work by thinking from first principles — not by copying conventional workflows.
 
+Every team becomes a **hook-driven state machine** when it runs. You design the pipeline; `/swarm:run` wires up the hooks:
+
+- **Plugin hooks** (deterministic) — bash guard script blocks writes outside active stages by reading state.json
+- **Hookify rules** (hot-reloadable) — generated per-session: stop gate, bash safety, context injection
+- **Orchestrator** — reads the pipeline, dispatches agents through stages
+
+You only design the pipeline. The hooks are automatic.
+
 ## Team Storage
 
 Teams resolve from three locations (first match wins):

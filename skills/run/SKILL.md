@@ -7,7 +7,7 @@ allowed-tools: ["Read", "Write", "Bash", "Glob", "Grep", "Agent"]
 
 # Start Swarm
 
-The user has provided a development plan. Parse it into a task queue, select a team pipeline, and hand off to the orchestrator. You do not implement anything yourself.
+The user has provided a development plan. Parse it into a task queue, wire up the hook-driven state machine, and hand off to the orchestrator. You do not implement anything yourself.
 
 ## Steps
 
@@ -46,9 +46,9 @@ Identify dependencies: if task B requires output from task A, B depends on A.
 
 ### 4. Create Queue
 
-Create the `.swarm/` directory. Write two files:
+Create the `.swarm/` directory. Write these files:
 
-**`.swarm/team.json`** — copy the selected team config here so the orchestrator can read it.
+**`.swarm/team.json`** — copy the selected team config.
 
 **`.swarm/state.json`**:
 
@@ -78,48 +78,129 @@ Create the `.swarm/` directory. Write two files:
 }
 ```
 
-Task IDs are sequential strings. Dependencies reference these IDs.
+**`.swarm/events.jsonl`** — initialize empty. Orchestrator appends events as audit trail.
 
-**`.swarm/events.jsonl`** — initialize as empty file. The orchestrator appends events here as an audit trail.
+### 5. Wire Up Hooks
 
-### 5. Display Queue
+This is what makes each team a hook-driven state machine. Generate hookify rules from the team config. These are hot-reloadable — no restart needed.
 
-Show the parsed queue and selected team to the user before launching:
+**Generate `.claude/hookify.swarm-guard.local.md`:**
+
+```markdown
+---
+name: swarm-guard
+enabled: true
+event: stop
+action: block
+---
+
+SWARM ACTIVE — Before stopping, read .swarm/state.json. If any task still has status other than DONE or FAILED, you MUST NOT stop. Continue processing the queue. Only stop when all tasks are DONE or FAILED and the machine state has been updated accordingly.
+```
+
+**Generate `.claude/hookify.swarm-safety.local.md`:**
+
+```markdown
+---
+name: swarm-safety
+enabled: true
+event: bash
+action: warn
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: git\s+(push|reset\s+--hard|clean\s+-f)|rm\s+-rf
+---
+
+Destructive command detected during swarm execution. The swarm orchestrator manages git operations (branching, merging worktrees). Do not run destructive git or file commands while the swarm is active unless explicitly resolving a failure.
+```
+
+**Generate `.claude/hookify.swarm-context.local.md`:**
+
+```markdown
+---
+name: swarm-context
+enabled: true
+event: prompt
+action: warn
+---
+
+SWARM SESSION ACTIVE — Team: <team-name> (<stage1> → <stage2> → ...). Check .swarm/state.json for current queue state before responding to the user. The orchestrator manages all agent dispatch — do not manually write code or spawn agents outside the swarm pipeline.
+```
+
+The plugin's `hooks/hooks.json` provides the deterministic layer — the bash guard script reads `.swarm/state.json` and blocks Write/Edit when no task is in an active stage. The hookify rules above provide the session-awareness layer.
+
+### 6. Display Queue
+
+Show the parsed queue, selected team, and active hooks:
 
 ```
 Team: dev (code → review)
+Hooks: swarm-guard (stop gate), swarm-safety (bash guard), swarm-context (session context)
 
 | # | Title              | Depends On | Status  |
 |---|--------------------|------------|---------|
 | 1 | Create user model  | —          | PENDING |
 | 2 | Add auth endpoints | 1          | PENDING |
+
+Spawning orchestrator...
 ```
 
-### 6. Launch Orchestrator
+### 7. Launch Orchestrator
 
 Spawn the orchestrator agent:
 
 - `subagent_type`: `swarm:orchestrator`
-- `prompt`: `"Execute the swarm queue. State: .swarm/state.json, Team: .swarm/team.json, Events: .swarm/events.jsonl. Project root: <absolute path to cwd>. Process all tasks to completion."`
+- `prompt`: Include all of this:
+  - State file path: `.swarm/state.json`
+  - Team config path: `.swarm/team.json`
+  - Event log path: `.swarm/events.jsonl`
+  - Project root: `<absolute path to cwd>`
+  - Instruction: `"Process all tasks to completion. For each task, follow the team pipeline stages in order. Dispatch stage agents using the Agent tool — use subagent_type from the stage config and isolation: worktree where specified. Update state.json after every transition. Log every event to events.jsonl."`
 
 Do NOT intervene while the orchestrator runs unless it returns an error.
 
-### 7. Report
+### 8. Cleanup and Report
 
-When the orchestrator returns, display:
+When the orchestrator returns:
 
+**Disable hookify rules** — set `enabled: false` in each generated rule file, or delete them:
+- `.claude/hookify.swarm-guard.local.md`
+- `.claude/hookify.swarm-safety.local.md`
+- `.claude/hookify.swarm-context.local.md`
+
+**Report results:**
 - Final status of each task (DONE / FAILED)
 - Summary of what was accomplished
 - Any failed tasks with failure reasons
+- Event count from `.swarm/events.jsonl`
 
 ## State Machine
 
-```
-Machine:  IDLE → RUNNING → DONE | FAILED
+The state machine is enforced by three hook layers:
 
-Task:     PENDING → stage[0] → stage[1] → ... → stage[N] → DONE
-          Any stage failure → returns to fail_returns_to stage
-          Attempts exhausted → FAILED
 ```
+┌─────────────────────────────────────────────────┐
+│  Layer 1: Plugin hooks (hooks/hooks.json)       │
+│  ├─ PreToolUse Write|Edit → guard-write.sh      │
+│  │  Reads state.json, blocks writes outside     │
+│  │  active pipeline stages (deterministic)      │
+│  └─ SubagentStop → prompt check                 │
+│     Blocks orchestrator stop if tasks remain    │
+├─────────────────────────────────────────────────┤
+│  Layer 2: Hookify rules (generated per-run)     │
+│  ├─ swarm-guard: stop gate for main session     │
+│  ├─ swarm-safety: warns on destructive commands │
+│  └─ swarm-context: injects state on user prompt │
+├─────────────────────────────────────────────────┤
+│  Layer 3: Orchestrator agent                    │
+│  └─ Reads team.json pipeline, dispatches agents │
+│     through stages, updates state.json          │
+└─────────────────────────────────────────────────┘
 
-The pipeline stages come from the team config. The orchestrator follows them in order.
+Task flow:
+  PENDING → stage[0] → stage[1] → ... → DONE
+               ↑            │
+               └────────────┘ (stage rejected)
+               │
+               └─→ FAILED (attempts exhausted)
+```
