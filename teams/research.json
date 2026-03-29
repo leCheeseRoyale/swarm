@@ -1,0 +1,17 @@
+{
+  "name": "research",
+  "description": "Research team: investigate then synthesize findings",
+  "stages": [
+    {
+      "name": "investigate",
+      "agent": "general-purpose",
+      "description": "Research the topic thoroughly using web search, docs, and codebase exploration"
+    },
+    {
+      "name": "synthesize",
+      "agent": "general-purpose",
+      "description": "Synthesize investigation findings into a clear, actionable report"
+    }
+  ],
+  "max_attempts": 2
+}

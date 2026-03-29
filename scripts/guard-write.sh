@@ -1,11 +1,10 @@
 #!/bin/bash
-# State machine write guard — blocks code writes when no task is in CODING state.
+# State machine write guard — blocks code writes when no task is in an active stage.
 # Called by PreToolUse hook on Write|Edit.
 set -euo pipefail
 
 # Require jq
 if ! command -v jq &>/dev/null; then
-  # Cannot enforce without jq — allow and warn
   echo "swarm: jq not found, skipping write guard" >&2
   exit 0
 fi
@@ -32,11 +31,12 @@ if [ "$machine_state" != "RUNNING" ]; then
   exit 0
 fi
 
-# During RUNNING: code writes only permitted when at least one task is CODING
-coding_count=$(jq '[.tasks[] | select(.status == "CODING")] | length' "$state_file" 2>/dev/null || echo "0")
+# During RUNNING: code writes only permitted when at least one task is in an active stage
+# Active = not PENDING, not DONE, not FAILED (i.e., currently being worked on by an agent)
+active_count=$(jq '[.tasks[] | select(.status != "PENDING" and .status != "DONE" and .status != "FAILED")] | length' "$state_file" 2>/dev/null || echo "0")
 
-if [ "$coding_count" -eq 0 ]; then
-  echo "BLOCKED: State machine violation — no task is in CODING state. Code writes are only permitted during the CODING phase." >&2
+if [ "$active_count" -eq 0 ]; then
+  echo "BLOCKED: State machine violation — no task is in an active pipeline stage. Code writes are only permitted while an agent is working a stage." >&2
   exit 2
 fi
 
