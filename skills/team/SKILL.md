@@ -7,97 +7,98 @@ allowed-tools: ["Read", "Write", "Glob", "Bash"]
 
 # Create a Swarm Team
 
-Build a custom team pipeline by understanding what the user is trying to accomplish. Ask questions, then generate the team config.
+Design the minimal, elegant agent pipeline for the user's work by thinking from first principles — not by copying conventional workflows.
 
 ## Team Storage
 
-Teams are resolved from three locations, checked in order:
+Teams resolve from three locations (first match wins):
 
-1. **Project-local**: `.swarm/teams/<name>.json` — specific to this repo
-2. **User-global**: `~/.claude/swarm/teams/<name>.json` — available in all projects, survives plugin reinstalls
-3. **Built-in**: `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json` — shipped defaults (dev, fullstack, research)
+1. **Project-local**: `.swarm/teams/<name>.json` — this repo only
+2. **User-global**: `~/.claude/swarm/teams/<name>.json` — all projects, survives reinstalls
+3. **Built-in**: `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json` — shipped defaults
 
-By default, new teams are saved to **user-global** so they're reusable everywhere.
-Use `--local` to save to the current project instead.
+New teams save to **user-global** by default. Use `--local` for project-specific.
 
 ## If `--list` or user asks to see teams
 
-List all available teams from all three locations. For each, show name, description, pipeline, and where it's stored. Use Glob to find `*.json` in all three paths.
+Glob all three locations for `*.json`. Show name, description, pipeline, and location.
 
-```
-Built-in teams:
-  dev         — code → review
-  fullstack   — implement → test → review
-  research    — investigate → synthesize
-
-Global teams (~/.claude/swarm/teams/):
-  docs        — draft → edit
-  secure-dev  — code → security → review
-
-Project teams (.swarm/teams/):
-  (none)
-```
-
-## Process
+## Design Process
 
 ### 1. Understand the Work
 
-If the user gave a clear description, extract what you need. Otherwise, ask ONE question at a time from this list until you have enough to build the pipeline:
+Ask the user ONE question: **"Walk me through how you'd do this work yourself, start to finish."**
 
-- **"What kind of work will this team handle?"** — coding, research, writing, data processing, design, devops, etc.
-- **"Walk me through how you'd do this manually — what steps, in what order?"** — this reveals the natural pipeline stages
-- **"Which steps need isolation (their own git branch)?"** — determines `isolation: "worktree"` stages
-- **"Are there quality gates — steps where work gets approved or sent back?"** — determines `pass_pattern` and `fail_returns_to`
-- **"How many retries before giving up on a task?"** — sets `max_attempts`
+Their answer reveals the real workflow — not the org chart or the roles they think they need, but the actual sequence of cognitive acts. Listen for:
 
-Stop asking as soon as you can construct the pipeline. Most teams need 2-4 questions max.
+- Where the **nature of the work changes** (thinking → building → judging)
+- Where **bad work moving forward would be costly** (these are real gates)
+- Where **files change and could collide** (these need isolation)
 
-### 2. Design the Pipeline
+One question is usually enough. Ask a second only if the answer was too vague to identify transitions.
 
-Map the user's workflow to pipeline stages. For each stage, determine:
+### 2. Deconstruct to First Principles
 
-- **`name`** — short lowercase identifier (e.g., `draft`, `code`, `review`, `test`, `research`)
-- **`agent`** — which agent runs this stage:
-  - `"swarm:coder"` — for implementation work (has Write/Edit tools)
-  - `"swarm:reviewer"` — for review/validation (read-only)
-  - `"general-purpose"` — for anything else (research, writing, analysis, testing)
-- **`isolation`** — set to `"worktree"` if the stage modifies files and needs branch isolation
-- **`pass_pattern`** — regex for quality gates (e.g., `"^PASS"`, `"^APPROVED"`, `"^LGTM"`). Omit if the stage always passes.
-- **`fail_returns_to`** — stage name to return to on failure. Omit if failures retry the same stage.
-- **`description`** — one-line description injected into the agent's prompt. Make this specific to what the agent should do.
+Before designing anything, strip away assumptions. Apply these tests silently:
 
-### 3. Show the Design
+**The Merge Test**: If two steps are always done by the same type of mind (both analytical, both creative, both judgmental), they're probably one stage. "Analyze the code" and "design the fix" are one cognitive act — you can't see the problem without seeing the solution shape.
 
-Present the pipeline visually before saving:
+**The Gate Test**: A quality gate only earns its cost if catching a failure HERE is cheaper than catching it LATER. Don't add a review stage just because "review is good practice." Ask: what breaks downstream if this stage produces bad output?
+
+**The Isolation Test**: A stage needs worktree isolation only if it modifies files AND could run in parallel with other tasks touching the same files. Research, analysis, and review never need isolation.
+
+**The Stage Justification Test**: Every stage must produce output that is *qualitatively different* from the previous stage's output. If two stages both produce "better code," they're one stage with a retry loop, not two stages.
+
+**The Cost Test**: Every stage boundary costs tokens, context loss, and a potential failure point. The burden of proof is on ADDING a stage, not on removing one.
+
+### 3. Build the Pipeline
+
+The irreducible pattern for any work is:
+
+```
+THINK → MAKE → JUDGE
+```
+
+Most pipelines are exactly three stages. Some are two (no judgment needed) or one (just do it). Very few legitimately need four or more. If you're designing more than four stages, you're probably fragmenting a single cognitive act across multiple agents.
+
+Map the user's workflow to the minimal stages:
+
+- **Thinker stages** use `general-purpose` — analysis, design, research, planning
+- **Maker stages** use `swarm:coder` with `isolation: "worktree"` — building, writing, implementing
+- **Judge stages** use `swarm:reviewer` with `pass_pattern` — verification, review, validation
+
+For each stage, write a `description` that tells the agent exactly what "done" looks like. Vague descriptions like "review the code" produce vague results. "Check for correctness against the task spec, security vulnerabilities, and missing edge cases" produces real judgment.
+
+### 4. Present the Design
+
+Show the pipeline with reasoning:
 
 ```
 Team: <name>
 <description>
 
+Why this shape:
+  <1-2 sentences on what was stripped away and why>
+
 Pipeline: <stage1> → <stage2> → ... → DONE
-                ↑          │
-                └──────────┘ (on failure)
 
 Stages:
-  1. <name> — <description> [agent: <agent>, isolation: <yes/no>]
-  2. <name> — <description> [agent: <agent>, gate: <pattern>]
+  1. <name> — <description> [<agent>, isolation: <yes/no>]
   ...
 
+On failure: <which stage retries to where>
 Max attempts: <N>
-Save to: ~/.claude/swarm/teams/<name>.json (global)
+Save to: <path>
 ```
 
-Ask: "Does this look right? Want to change anything?"
+Ask: "Does this capture your workflow? Want to adjust anything?"
 
-### 4. Save the Team
+### 5. Save
 
-Once confirmed, determine a team name (lowercase, hyphenated).
+Determine team name (lowercase, hyphenated). Check for conflicts across all three locations.
 
-Check for name conflicts across all three locations using Glob.
-
-**Save location:**
-- If `--local` flag: write to `.swarm/teams/<name>.json` (create dir if needed)
-- Otherwise: write to `~/.claude/swarm/teams/<name>.json`
+- Default: `~/.claude/swarm/teams/<name>.json`
+- With `--local`: `.swarm/teams/<name>.json`
 
 ```json
 {
@@ -108,67 +109,31 @@ Check for name conflicts across all three locations using Glob.
       "name": "<stage>",
       "agent": "<agent-type>",
       "isolation": "worktree",
-      "description": "<what the agent should do>"
+      "description": "<what done looks like for this stage>"
     }
   ],
   "max_attempts": <N>
 }
 ```
 
-### 5. Confirm
+Confirm: team name, save path, usage command (`/swarm:run --team <name> <plan>`).
 
-Tell the user:
-- Team saved as `<name>` at `<path>`
-- How to use it: `/swarm:run --team <name> <plan>`
-- Available in: all projects (global) or this project only (local)
-- They can edit the JSON directly to tweak later
+## Design Principles
 
-## Guidelines
+These are non-negotiable:
 
-- **Keep pipelines short.** 2-4 stages is ideal. More stages = more overhead, not more quality.
-- **Every stage needs a clear purpose.** If you can't explain what the agent does in one sentence, the stage is too vague.
-- **Quality gates go on review/validation stages**, not implementation stages.
-- **Use `general-purpose` agent** for stages that don't need specialized tools. Only use `swarm:coder` when the stage writes code and `swarm:reviewer` when it's a read-only review.
-- **Worktree isolation** is for stages that modify files. Research, analysis, and review stages don't need it.
-- **Stage descriptions matter** — they're injected into the agent's prompt and determine what it actually does. Be specific: "Write unit tests covering all edge cases" is better than "Test the code".
+1. **Fewer stages is better.** Every boundary has a cost. Three is the sweet spot. Two is fine. One is brave. Five is suspicious.
+2. **Stages are cognitive acts, not job titles.** Don't create a "tester" stage and a "reviewer" stage — if they both answer "is this good?", they're one stage.
+3. **Gates earn their place.** A `pass_pattern` stage must catch failures that would be MORE expensive to catch later. If failure at stage N just means redoing stage N anyway, skip the gate.
+4. **Descriptions are instructions, not labels.** "Review the code" is a label. "Verify all task requirements are met, check for injection vulnerabilities and unhandled edge cases, run existing tests if present" is an instruction.
+5. **When in doubt, simplify.** A clean two-stage pipeline that works is better than an elegant five-stage pipeline that fragments the work.
 
-## Examples
+## Anti-Patterns
 
-**User says "I need a team for writing documentation":**
-```json
-{
-  "name": "docs",
-  "description": "Documentation team: draft then editorial review",
-  "stages": [
-    { "name": "draft", "agent": "general-purpose", "isolation": "worktree", "description": "Write clear, comprehensive documentation for the specified topic" },
-    { "name": "edit", "agent": "general-purpose", "pass_pattern": "^APPROVED", "fail_returns_to": "draft", "description": "Review documentation for accuracy, clarity, completeness, and style. Respond with APPROVED or REJECTED with specific feedback." }
-  ],
-  "max_attempts": 3
-}
-```
+Reject these if the user (or your instincts) suggest them:
 
-**User says "I want to prototype fast — no review, just build":**
-```json
-{
-  "name": "rapid",
-  "description": "Rapid prototyping: implement only, no review gate",
-  "stages": [
-    { "name": "build", "agent": "swarm:coder", "isolation": "worktree", "description": "Implement the task quickly, favoring working code over perfection" }
-  ],
-  "max_attempts": 2
-}
-```
-
-**User says "We need security review before anything merges":**
-```json
-{
-  "name": "secure-dev",
-  "description": "Security-focused development: code, security audit, then standard review",
-  "stages": [
-    { "name": "code", "agent": "swarm:coder", "isolation": "worktree", "description": "Implement the task following secure coding practices" },
-    { "name": "security", "agent": "general-purpose", "pass_pattern": "^PASS", "fail_returns_to": "code", "description": "Audit the implementation for security vulnerabilities: injection, auth bypass, data exposure, OWASP Top 10. Respond PASS or FAIL with specific findings." },
-    { "name": "review", "agent": "swarm:reviewer", "pass_pattern": "^PASS", "fail_returns_to": "code", "description": "Review for correctness, code quality, and completeness" }
-  ],
-  "max_attempts": 3
-}
-```
+- **"We should add a testing stage AND a review stage"** — If both check quality, merge them. One judge is enough.
+- **"Let's add an analysis stage before the design stage"** — You can't analyze without forming a view. That's one stage.
+- **"We need separate stages for frontend and backend"** — Those are different TASKS in the queue, not different stages in the pipeline. The orchestrator parallelizes tasks, not stages.
+- **"Add a documentation stage at the end"** — Documentation is part of the maker's job, not a separate stage. Put it in the maker's description.
+- **"Let's add a planning stage"** — The orchestrator plans. That's its job. Don't make an agent plan for the planner.
