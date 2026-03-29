@@ -1,0 +1,25 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/guard-write.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "SubAgentStop": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "prompt",
+          "prompt": "The orchestrator agent is about to stop. Read .swarm/state.json. Check: are all tasks DONE or FAILED? If any task is still PENDING, CODING, or REVIEWING, respond with decision 'block' and list the incomplete tasks. Only approve stopping if the queue is fully processed or the agent has documented an unrecoverable error."
+        }
+      ]
+    }
+  ]
+}

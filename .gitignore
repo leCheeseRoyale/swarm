@@ -1,0 +1,6 @@
+# Swarm runtime state (generated per-project, not part of plugin)
+.swarm/
+
+# OS
+.DS_Store
+Thumbs.db
