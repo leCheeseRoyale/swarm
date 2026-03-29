@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(plugin-dev:create-plugin)",
+      "Bash(mkdir -p /c/Users/Maxwell/ai/physics/swarm/.claude-plugin)",
+      "Bash(mkdir -p /c/Users/Maxwell/ai/physics/swarm/skills/run)",
+      "Bash(mkdir -p /c/Users/Maxwell/ai/physics/swarm/skills/status)",
+      "Bash(mkdir -p /c/Users/Maxwell/ai/physics/swarm/skills/push)",
+      "Bash(mkdir -p /c/Users/Maxwell/ai/physics/swarm/agents)",
+      "Bash(chmod +x /c/Users/Maxwell/ai/physics/swarm/scripts/guard-write.sh)",
+      "Bash(python3:*)",
+      "Bash(bash -n \"C:/Users/Maxwell/ai/physics/swarm/scripts/guard-write.sh\")",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh repo:*)",
+      "Bash(xargs wc:*)",
+      "Bash(git push:*)",
+      "Bash(cp -r /c/Users/Maxwell/ai/physics/swarm/* \"/c/Users/Maxwell/.claude/plugins/cache/OnSpotify-Plugins/swarm/0.1.0/\")",
+      "Bash(cp -r /c/Users/Maxwell/ai/physics/swarm/.claude-plugin \"/c/Users/Maxwell/.claude/plugins/cache/OnSpotify-Plugins/swarm/0.1.0/\")",
+      "Bash(cp /c/Users/Maxwell/ai/physics/swarm/.gitignore \"/c/Users/Maxwell/.claude/plugins/cache/OnSpotify-Plugins/swarm/0.1.0/\")",
+      "Bash(xargs grep:*)",
+      "Bash(xargs ls:*)",
+      "Bash(find /c/Users/Maxwell/.claude/plugins/cache/claude-plugins-official -name *.json -type f -exec grep -l hooks {})",
+      "Bash(2)"
+    ]
+  }
+}
