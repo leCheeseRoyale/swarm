@@ -22,14 +22,15 @@ git init && git add -A && git commit -m "initial commit before swarm" --allow-em
 ### 2. Select Team
 
 Check if the user specified a team (e.g., `--team fullstack` or `--team research`).
+If not specified, default to `dev`.
 
-- If specified: read the team config from `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json`
-- If not specified: default to `${CLAUDE_PLUGIN_ROOT}/teams/dev.json`
+Resolve the team config by checking these locations in order (first match wins):
 
-Available built-in teams:
-- **dev** — code → review (default)
-- **fullstack** — implement → test → review
-- **research** — investigate → synthesize
+1. **Project-local**: `.swarm/teams/<name>.json`
+2. **User-global**: `~/.claude/swarm/teams/<name>.json`
+3. **Built-in**: `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json`
+
+If not found in any location, tell the user and suggest `/swarm:team` to create one.
 
 Read the team JSON to understand the pipeline stages.
 

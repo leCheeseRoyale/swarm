@@ -1,13 +1,42 @@
 ---
 name: team
-description: Use to create a new swarm team or workflow through conversation. Triggers on "create a swarm team", "new team", "new workflow", "custom pipeline", "set up a team for", "swarm team for", or /swarm:team.
-argument-hint: "[team name or description of what you're building]"
-allowed-tools: ["Read", "Write", "Glob"]
+description: Use to create, list, or manage swarm teams/workflows through conversation. Triggers on "create a swarm team", "new team", "new workflow", "custom pipeline", "set up a team for", "swarm team for", "list teams", "show teams", or /swarm:team.
+argument-hint: "[--local] [--list] [team name or description of what you're building]"
+allowed-tools: ["Read", "Write", "Glob", "Bash"]
 ---
 
 # Create a Swarm Team
 
 Build a custom team pipeline by understanding what the user is trying to accomplish. Ask questions, then generate the team config.
+
+## Team Storage
+
+Teams are resolved from three locations, checked in order:
+
+1. **Project-local**: `.swarm/teams/<name>.json` — specific to this repo
+2. **User-global**: `~/.claude/swarm/teams/<name>.json` — available in all projects, survives plugin reinstalls
+3. **Built-in**: `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json` — shipped defaults (dev, fullstack, research)
+
+By default, new teams are saved to **user-global** so they're reusable everywhere.
+Use `--local` to save to the current project instead.
+
+## If `--list` or user asks to see teams
+
+List all available teams from all three locations. For each, show name, description, pipeline, and where it's stored. Use Glob to find `*.json` in all three paths.
+
+```
+Built-in teams:
+  dev         — code → review
+  fullstack   — implement → test → review
+  research    — investigate → synthesize
+
+Global teams (~/.claude/swarm/teams/):
+  docs        — draft → edit
+  secure-dev  — code → security → review
+
+Project teams (.swarm/teams/):
+  (none)
+```
 
 ## Process
 
@@ -55,19 +84,20 @@ Stages:
   ...
 
 Max attempts: <N>
+Save to: ~/.claude/swarm/teams/<name>.json (global)
 ```
 
 Ask: "Does this look right? Want to change anything?"
 
 ### 4. Save the Team
 
-Once confirmed, determine a team name (lowercase, hyphenated). Check existing teams:
+Once confirmed, determine a team name (lowercase, hyphenated).
 
-```
-${CLAUDE_PLUGIN_ROOT}/teams/*.json
-```
+Check for name conflicts across all three locations using Glob.
 
-Write the team config to `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json`:
+**Save location:**
+- If `--local` flag: write to `.swarm/teams/<name>.json` (create dir if needed)
+- Otherwise: write to `~/.claude/swarm/teams/<name>.json`
 
 ```json
 {
@@ -88,9 +118,10 @@ Write the team config to `${CLAUDE_PLUGIN_ROOT}/teams/<name>.json`:
 ### 5. Confirm
 
 Tell the user:
-- Team saved as `<name>`
+- Team saved as `<name>` at `<path>`
 - How to use it: `/swarm:run --team <name> <plan>`
-- Remind them they can edit `teams/<name>.json` directly to tweak later
+- Available in: all projects (global) or this project only (local)
+- They can edit the JSON directly to tweak later
 
 ## Guidelines
 

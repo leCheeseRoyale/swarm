@@ -40,7 +40,17 @@ Teams define the agent pipeline. Select with `--team <name>` or default to `dev`
 
 ### Custom Teams
 
-Create `teams/<name>.json` in the plugin directory:
+Create a team interactively with `/swarm:team`, or write JSON directly.
+
+Teams are resolved from three locations (first match wins):
+
+1. **Project-local**: `.swarm/teams/<name>.json` — this repo only
+2. **User-global**: `~/.claude/swarm/teams/<name>.json` — all projects, survives reinstalls
+3. **Built-in**: `<plugin>/teams/<name>.json` — shipped defaults
+
+`/swarm:team` saves to user-global by default. Use `--local` for project-specific teams.
+
+Team config format:
 
 ```json
 {
